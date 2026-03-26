@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class EmojiValidator::ValidatorTest < Minitest::Test
+class ValidatorTest < Minitest::Test
   class SingleEmojiModel
     include ActiveModel::Validations
     attr_accessor :content
@@ -129,6 +129,126 @@ class EmojiValidator::ValidatorTest < Minitest::Test
   def test_emoji_with_skin_tone
     model = SingleEmojiModel.new
     model.content = "👋🏽"
+    assert model.valid?
+  end
+end
+
+class NoEmojiValidatorTest < Minitest::Test
+  class NoEmojiModel
+    include ActiveModel::Validations
+    attr_accessor :content
+    validates :content, no_emoji: true
+  end
+
+  class NoEmojiCustomMessageModel
+    include ActiveModel::Validations
+    attr_accessor :content
+    validates :content, no_emoji: { message: "custom error" }
+  end
+
+  def test_valid_no_emoji
+    model = NoEmojiModel.new
+    model.content = "Hello World"
+    assert model.valid?
+  end
+
+  def test_invalid_with_emoji
+    model = NoEmojiModel.new
+    model.content = "Hello 😀"
+    assert !model.valid?
+    assert_equal ["cannot contain emojis"], model.errors[:content]
+  end
+
+  def test_invalid_only_emoji
+    model = NoEmojiModel.new
+    model.content = "😀"
+    assert !model.valid?
+  end
+
+  def test_valid_nil
+    model = NoEmojiModel.new
+    model.content = nil
+    assert model.valid?
+  end
+
+  def test_custom_error_message
+    model = NoEmojiCustomMessageModel.new
+    model.content = "😀"
+    assert !model.valid?
+    assert_equal ["custom error"], model.errors[:content]
+  end
+
+  def test_emoji_with_skin_tone_invalid
+    model = NoEmojiModel.new
+    model.content = "👋🏽"
+    assert !model.valid?
+  end
+end
+
+class NoEmojiAnywhereValidatorTest < Minitest::Test
+  class FakeColumn
+    attr_reader :type
+
+    def initialize(type)
+      @type = type
+    end
+  end
+
+  class NoEmojiAnywhereTestModel
+    include ActiveModel::Validations
+    attr_accessor :name, :description, :count
+
+    def self.columns_hash
+      {
+        "name" => FakeColumn.new(:string),
+        "description" => FakeColumn.new(:text),
+        "count" => FakeColumn.new(:integer)
+      }
+    end
+
+    include ::EmojiValidator::NoEmojiAnywhereValidator
+  end
+
+  def test_valid_no_emojis_anywhere
+    model = NoEmojiAnywhereTestModel.new
+    model.name = "John"
+    model.description = "A description"
+    model.count = 42
+    assert model.valid?
+  end
+
+  def test_invalid_emoji_in_string_column
+    model = NoEmojiAnywhereTestModel.new
+    model.name = "😀"
+    model.description = "Valid description"
+    assert !model.valid?
+    assert model.errors[:name].any?
+  end
+
+  def test_invalid_emoji_in_text_column
+    model = NoEmojiAnywhereTestModel.new
+    model.name = "John"
+    model.description = "😀 emoji here"
+    assert !model.valid?
+    assert model.errors[:description].any?
+  end
+
+  def test_invalid_emojis_in_multiple_columns
+    model = NoEmojiAnywhereTestModel.new
+    model.name = "😀"
+    model.description = "🎉"
+    assert !model.valid?
+    assert model.errors[:name].any?
+    assert model.errors[:description].any?
+    assert_equal 2, model.errors.count
+  end
+
+  def test_integer_column_not_validated
+    model = NoEmojiAnywhereTestModel.new
+    model.name = "Valid"
+    model.description = "Valid"
+    model.count = 42
+    # Should not try to validate integer column
     assert model.valid?
   end
 end

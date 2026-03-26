@@ -104,6 +104,48 @@ class Reaction < ApplicationRecord
 end
 ```
 
+### Disallowing Emojis
+
+In addition to requiring emojis, you can also validate that fields do **not** contain emojis.
+
+#### `no_emoji` - Validate single attributes
+
+```ruby
+class Person < ApplicationRecord
+  validates :first_name, no_emoji: true
+end
+```
+
+```ruby
+person.first_name = "John"      # ✓ Valid
+person.first_name = "😃John"    # ✗ Invalid - contains emoji
+person.first_name = "Jo😃hn"    # ✗ Invalid - contains emoji
+```
+
+##### Custom Error Message
+
+```ruby
+class Person < ApplicationRecord
+  validates :first_name, no_emoji: { message: "cannot contain emojis" }
+end
+```
+
+#### `NoEmojiAnywhereValidator` - Validate all string/text columns
+
+Automatically apply no-emoji validation to all string and text columns in your model:
+
+```ruby
+class Person < ApplicationRecord
+  include EmojiValidator::NoEmojiAnywhereValidator
+end
+```
+
+```ruby
+person = Person.new(first_name: "😃", last_name: "😃")
+person.valid? # false
+person.errors.count # 2 (errors on both first_name and last_name)
+```
+
 ## Emoji Support
 
 This gem uses the `unicode-emoji` gem which supports:
