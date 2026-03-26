@@ -1,0 +1,114 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+current_name = "emoji_validator"
+
+def to_camel(snake)
+  snake.split("_").map(&:capitalize).join
+end
+
+# Parse --from flag
+args = ARGV.dup
+if (idx = args.index("--from"))
+  current_name = args.delete_at(idx + 1)&.tr("-", "_")
+  args.delete_at(idx)
+  abort "ERROR: --from requires a gem name" unless current_name && !current_name.empty?
+end
+
+name = args[0]
+
+if name.nil? || name.empty?
+  print "Engine name (snake_case or dash-case): "
+  name = $stdin.gets.chomp
+end
+
+abort "Usage: bin/rename-gem <engine_name> [--from <current_name>]" if name.empty?
+
+old_snake = current_name
+old_camel = to_camel(old_snake)
+
+snake = name.tr("-", "_")
+camel = to_camel(snake)
+
+if snake == old_snake
+  abort "Already named #{snake}, nothing to do"
+end
+
+root = File.expand_path("..", __dir__)
+
+# --- Rename directories ---
+
+# lib/old_name -> lib/new_name
+old_dir = File.join(root, "lib", old_snake)
+new_dir = File.join(root, "lib", snake)
+if File.directory?(old_dir)
+  FileUtils.mv(old_dir, new_dir)
+  puts "  mv lib/#{old_snake}/ -> lib/#{snake}/"
+end
+
+# Engine app directories
+%w[
+  app/assets/stylesheets
+  app/assets/javascripts
+  app/controllers
+  app/helpers
+  app/javascript
+  app/views
+].each do |parent|
+  old = File.join(root, parent, old_snake)
+  new_path = File.join(root, parent, snake)
+  if File.directory?(old)
+    FileUtils.mv(old, new_path)
+    puts "  mv #{parent}/#{old_snake}/ -> #{parent}/#{snake}/"
+  end
+end
+
+# --- Rename files ---
+
+renames = {
+  "lib/#{old_snake}.rb"           => "lib/#{snake}.rb",
+  "#{old_snake}.gemspec"          => "#{snake}.gemspec",
+  "test/#{old_snake}_test.rb"     => "test/#{snake}_test.rb",
+}
+
+renames.each do |old_rel, new_rel|
+  old_path = File.join(root, old_rel)
+  new_path = File.join(root, new_rel)
+  next unless File.exist?(old_path)
+  next if old_path == new_path
+
+  FileUtils.mv(old_path, new_path)
+  puts "  mv #{old_rel} -> #{new_rel}"
+end
+
+# --- Replace content in all files ---
+
+files = Dir.glob(File.join(root, "**/*"), File::FNM_DOTMATCH)
+  .reject { |f| File.directory?(f) }
+  .reject { |f| f.include?("/.git/") }
+
+files.each do |path|
+  content = File.read(path)
+  original = content.dup
+
+  content.gsub!(old_camel, camel)
+  content.gsub!(old_snake, snake)
+
+  if content != original
+    File.write(path, content)
+    puts "  updated #{path.sub("#{root}/", "")}"
+  end
+end
+
+# Update current_name in this script to reflect the new name
+script_path = File.join(root, "bin", "rename-gem")
+if File.exist?(script_path)
+  script = File.read(script_path)
+  script.sub!(/^current_name = ".*"$/, "current_name = \"#{snake}\"")
+  File.write(script_path, script)
+  puts "  updated bin/rename-gem (current_name = \"#{snake}\")"
+end
+
+puts "\nRenamed #{old_snake} -> #{snake} (#{old_camel} -> #{camel})"
