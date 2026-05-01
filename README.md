@@ -1,5 +1,7 @@
 # EmojiValidator
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/n-at-han-k/emoji-validator-rails)
+
 A Rails engine that provides validators for emoji strings using the [unicode-emoji](https://github.com/janlelis/unicode-emoji) gem.
 
 ## Installation
